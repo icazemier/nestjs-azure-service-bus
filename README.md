@@ -1,3 +1,5 @@
+NOTE: Forked repository from: https://github.com/engcfraposo/nestjs-azure-service-bus
+
 # NestJS Azure Service Bus
 
 [![npm version](https://img.shields.io/npm/v/nestjs-azure-service-bus.svg)](https://www.npmjs.com/package/nestjs-azure-service-bus)
