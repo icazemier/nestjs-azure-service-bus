@@ -1,9 +1,10 @@
 {
   "name": "@icazemier/nestjs-azure-service-bus",
-  "version": "0.0.17",
+  "private": false,
+  "version": "0.0.19",
   "homepage": "https://github.com/icazemier/nestjs-azure-service-bus",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "description": "A dynamic module for NestJS that provides integration with Azure Service Bus.",
   "author": "engcfraposo",
   "contributors": [
@@ -12,6 +13,11 @@
       "email": "git@warmemelk.nl",
       "url": "https://github.com/icazemier"
     }
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "license": "MIT",
   "scripts": {
