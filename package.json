@@ -1,7 +1,7 @@
 {
   "name": "@icazemier/nestjs-azure-service-bus",
   "private": false,
-  "version": "0.0.19",
+  "version": "0.0.20",
   "homepage": "https://github.com/icazemier/nestjs-azure-service-bus",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
