@@ -7,7 +7,7 @@ import prettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default [
   {
-    ignores: ['dist/**', 'coverage/**'],
+    ignores: ['build/**', 'dist/**', 'coverage/**'],
   },
   {
     files: ['**/*.ts'],

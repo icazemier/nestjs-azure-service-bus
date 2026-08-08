@@ -1,187 +1,216 @@
+import { Injectable, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import {
-  AzureServiceBusModule,
-  AzureSBOptions,
-  AzureSBSenderReceiverOptions,
-} from './azure-service-bus.module';
 import { ServiceBusClient } from '@azure/service-bus';
-import { DefaultAzureCredential } from '@azure/identity';
+import { AzureServiceBusModule } from './azure-service-bus.module.js';
+import {
+  AZURE_SERVICE_BUS_CLIENT,
+  receiverToken,
+  senderToken,
+} from '../tokens.js';
 
-jest.mock('@azure/service-bus');
-jest.mock('@azure/identity');
+// The Azure SDK opens its AMQP links lazily, on the first send or receive, so
+// real clients, senders and receivers can be built here without any network.
+// That keeps these tests on the real implementation rather than on a mock that
+// would only restate it.
+const CONNECTION_STRING =
+  'Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=root;SharedAccessKey=abc123=';
+
+const NAMESPACE = 'example.servicebus.windows.net';
+
+@Injectable()
+class QueueNameSource {
+  readonly connectionString = CONNECTION_STRING;
+}
+
+@Module({
+  providers: [QueueNameSource],
+  exports: [QueueNameSource],
+})
+class SourceModule {}
 
 describe('AzureServiceBusModule', () => {
-  let module: AzureServiceBusModule;
+  describe('forRoot', () => {
+    it('provides a client built from a connection string', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRoot({
+            connectionString: CONNECTION_STRING,
+          }),
+        ],
+      }).compile();
 
-  beforeEach(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        AzureServiceBusModule.forRoot({
-          connectionString: 'fake-connection-string',
+      const client = moduleRef.get<ServiceBusClient>(AZURE_SERVICE_BUS_CLIENT);
+
+      expect(client).toBeInstanceOf(ServiceBusClient);
+      expect(client.fullyQualifiedNamespace).toBe(NAMESPACE);
+
+      await moduleRef.close();
+    });
+
+    it('uses the credential it is given for a namespace', async () => {
+      const credential = {
+        getToken: async () => ({
+          token: 'token',
+          expiresOnTimestamp: Date.now() + 60_000,
         }),
-      ],
-    }).compile();
+      };
 
-    module = moduleRef.get<AzureServiceBusModule>(AzureServiceBusModule);
-  });
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRoot({
+            fullyQualifiedNamespace: NAMESPACE,
+            credential,
+          }),
+        ],
+      }).compile();
 
-  it('should be defined', () => {
-    expect(module).toBeDefined();
-  });
+      const client = moduleRef.get<ServiceBusClient>(AZURE_SERVICE_BUS_CLIENT);
 
-  it('should create a ServiceBusClient with a connection string', () => {
-    const options: AzureSBOptions = {
-      connectionString: 'fake-connection-string',
-    };
-    expect(ServiceBusClient).toHaveBeenCalledWith(options.connectionString);
-  });
+      expect(client.fullyQualifiedNamespace).toBe(NAMESPACE);
 
-  it('should create a ServiceBusClient with a fullyQualifiedNamespace', () => {
-    jest.resetAllMocks();
-
-    const options: AzureSBOptions = {
-      fullyQualifiedNamespace: 'fake-namespace',
-    };
-    AzureServiceBusModule.forRoot(options);
-
-    expect(ServiceBusClient).toHaveBeenCalledWith(
-      options.fullyQualifiedNamespace,
-      expect.any(DefaultAzureCredential),
-    );
-  });
-
-  it('should create a ServiceBusClient with a connection string using async', async () => {
-    const optionsFactory = jest.fn().mockResolvedValue({
-      connectionString: 'fake-connection-string',
+      await moduleRef.close();
     });
 
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        AzureServiceBusModule.forRootAsync({ useFactory: optionsFactory }),
-      ],
-    }).compile();
+    // Before 1.0.0 the client was built with `useValue`, inside the static
+    // method, so merely describing the module opened a connection and a bad
+    // connection string threw while the module graph was being assembled.
+    it('builds nothing until the module is instantiated', () => {
+      expect(() =>
+        AzureServiceBusModule.forRoot({
+          connectionString: 'not-a-connection-string',
+        }),
+      ).not.toThrow();
+    });
 
-    const client = moduleRef.get<ServiceBusClient>(
-      'AZURE_SERVICE_BUS_CONNECTION',
-    );
-    expect(client).toBeInstanceOf(ServiceBusClient);
-    expect(optionsFactory).toHaveBeenCalled();
+    it('surfaces a bad connection string when the module starts', async () => {
+      await expect(
+        Test.createTestingModule({
+          imports: [
+            AzureServiceBusModule.forRoot({
+              connectionString: 'not-a-connection-string',
+            }),
+          ],
+        }).compile(),
+      ).rejects.toThrow();
+    });
+
+    it('is global, so the client reaches modules that do not import it', async () => {
+      const definition = AzureServiceBusModule.forRoot({
+        connectionString: CONNECTION_STRING,
+      });
+
+      expect(definition.global).toBe(true);
+    });
   });
 
-  it('should register sender and receiver providers correctly', async () => {
-    const optionsRoot: AzureSBOptions = {
-      connectionString: 'fake-connection-string',
-    };
+  describe('forRootAsync', () => {
+    it('builds the client from an injected dependency', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRootAsync({
+            imports: [SourceModule],
+            inject: [QueueNameSource],
+            useFactory: (source: QueueNameSource) => ({
+              connectionString: source.connectionString,
+            }),
+          }),
+        ],
+      }).compile();
 
-    const options: AzureSBSenderReceiverOptions = {
-      senders: ['sender1', 'sender2'],
-      receivers: ['receiver1', 'receiver2'],
-    };
+      const client = moduleRef.get<ServiceBusClient>(AZURE_SERVICE_BUS_CLIENT);
 
-    // After you import ServiceBusClient...
-    ServiceBusClient.prototype.createSender = jest
-      .fn()
-      .mockImplementation((queue) => `Mock sender for ${queue}`);
-    ServiceBusClient.prototype.createReceiver = jest
-      .fn()
-      .mockImplementation((queue) => `Mock receiver for ${queue}`);
+      expect(client.fullyQualifiedNamespace).toBe(NAMESPACE);
 
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        AzureServiceBusModule.forRoot(optionsRoot),
-        AzureServiceBusModule.forFeature(options),
-      ],
-    }).compile();
+      await moduleRef.close();
+    });
 
-    const sender1 = moduleRef.get(
-      `AZURE_SB_SENDER_${options.senders[0].toUpperCase()}`,
-    );
-    const sender2 = moduleRef.get(
-      `AZURE_SB_SENDER_${options.senders[1].toUpperCase()}`,
-    );
-    const receiver1 = moduleRef.get(
-      `AZURE_SB_RECEIVER_${options.receivers[0].toUpperCase()}`,
-    );
-    const receiver2 = moduleRef.get(
-      `AZURE_SB_RECEIVER_${options.receivers[1].toUpperCase()}`,
-    );
+    it('awaits a factory that resolves asynchronously', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRootAsync({
+            useFactory: async () => ({ connectionString: CONNECTION_STRING }),
+          }),
+        ],
+      }).compile();
 
-    expect(sender1).toBeDefined();
-    expect(sender2).toBeDefined();
-    expect(receiver1).toBeDefined();
-    expect(receiver2).toBeDefined();
+      expect(
+        moduleRef.get<ServiceBusClient>(AZURE_SERVICE_BUS_CLIENT),
+      ).toBeInstanceOf(ServiceBusClient);
+
+      await moduleRef.close();
+    });
   });
 
-  it('should create ServiceBusClient senders and receivers with the correct queues using async', async () => {
-    const optionsRoot: AzureSBOptions = {
-      connectionString: 'fake-connection-string',
-    };
+  describe('forFeature', () => {
+    it('exposes a sender and a receiver per queue', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRoot({
+            connectionString: CONNECTION_STRING,
+          }),
+          AzureServiceBusModule.forFeature({
+            senders: ['orders'],
+            receivers: ['invoices'],
+          }),
+        ],
+      }).compile();
 
-    const senders = ['sender1', 'sender2'];
-    const receivers = ['receiver1', 'receiver2'];
-    const optionsFactory = jest.fn().mockResolvedValue({
-      senders,
-      receivers,
+      expect(moduleRef.get(senderToken('orders')).entityPath).toBe('orders');
+      expect(moduleRef.get(receiverToken('invoices')).entityPath).toBe(
+        'invoices',
+      );
+
+      await moduleRef.close();
     });
 
-    // Mock the ServiceBusClient's createSender and createReceiver methods
-    const createSenderMock = jest.fn();
-    const createReceiverMock = jest.fn();
-    jest
-      .spyOn(ServiceBusClient.prototype, 'createSender')
-      .mockImplementation(createSenderMock);
-    jest
-      .spyOn(ServiceBusClient.prototype, 'createReceiver')
-      .mockImplementation(createReceiverMock);
+    it('keeps queues that differ only in case apart', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRoot({
+            connectionString: CONNECTION_STRING,
+          }),
+          AzureServiceBusModule.forFeature({ senders: ['orders', 'Orders'] }),
+        ],
+      }).compile();
 
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        AzureServiceBusModule.forRoot(optionsRoot),
-        AzureServiceBusModule.forFeatureAsync({ useFactory: optionsFactory }),
-      ],
-    }).compile();
+      expect(moduleRef.get(senderToken('orders')).entityPath).toBe('orders');
+      expect(moduleRef.get(senderToken('Orders')).entityPath).toBe('Orders');
 
-    const sendersProvider = moduleRef.get('AZURE_SB_SENDERS');
-    const receiversProvider = moduleRef.get('AZURE_SB_RECEIVERS');
-
-    expect(sendersProvider).toBeDefined();
-    expect(receiversProvider).toBeDefined();
-
-    expect(createSenderMock).toHaveBeenCalledTimes(senders.length);
-    senders.forEach((sender) => {
-      expect(createSenderMock).toHaveBeenCalledWith(sender);
+      await moduleRef.close();
     });
 
-    expect(createReceiverMock).toHaveBeenCalledTimes(receivers.length);
-    receivers.forEach((receiver) => {
-      expect(createReceiverMock).toHaveBeenCalledWith(receiver);
+    it('registers nothing when given no queues', () => {
+      const definition = AzureServiceBusModule.forFeature({});
+
+      expect(definition.providers).toHaveLength(0);
+      expect(definition.exports).toHaveLength(0);
     });
 
-    expect(optionsFactory).toHaveBeenCalled();
+    // A feature module that leaked into every other module would publish one
+    // feature's senders application-wide; only forRoot is global.
+    it('is not global', () => {
+      expect(
+        AzureServiceBusModule.forFeature({ senders: ['orders'] }).global,
+      ).toBeUndefined();
+    });
   });
 
-  it('should create a ServiceBusClient with a fully qualified namespace using async', async () => {
-    const optionsFactory = jest.fn().mockResolvedValue({
-      fullyQualifiedNamespace: 'fake-namespace',
+  describe('shutdown', () => {
+    it('closes the client when the application closes', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [
+          AzureServiceBusModule.forRoot({
+            connectionString: CONNECTION_STRING,
+          }),
+        ],
+      }).compile();
+
+      const client = moduleRef.get<ServiceBusClient>(AZURE_SERVICE_BUS_CLIENT);
+      const close = jest.spyOn(client, 'close');
+
+      await moduleRef.close();
+
+      expect(close).toHaveBeenCalledTimes(1);
     });
-
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        AzureServiceBusModule.forRootAsync({ useFactory: optionsFactory }),
-      ],
-    }).compile();
-
-    const client = moduleRef.get<ServiceBusClient>(
-      'AZURE_SERVICE_BUS_CONNECTION',
-    );
-
-    expect(client).toBeInstanceOf(ServiceBusClient);
-
-    // Here, you are awaiting optionsFactory() to get the resolved value
-    expect(ServiceBusClient).toHaveBeenCalledWith(
-      (await optionsFactory()).fullyQualifiedNamespace,
-      expect.any(DefaultAzureCredential),
-    );
-    expect(optionsFactory).toHaveBeenCalled();
   });
 });

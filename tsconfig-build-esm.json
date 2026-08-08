@@ -4,6 +4,8 @@
     "moduleResolution": "nodenext",
     "lib": ["ESNext"],
     "target": "ES2023",
+    "outDir": "./build/esm",
+    "rootDir": "./src",
     "strict": true,
     "noImplicitReturns": true,
     "noUnusedLocals": true,
@@ -12,12 +14,14 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "declaration": true,
-    "sourceMap": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    // Nest resolves constructor parameters from the metadata TypeScript emits
+    // here; without these two the DI container sees no parameter types at all.
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "noEmit": true,
-    "types": ["node", "jest"]
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "build", "coverage"]
+  "exclude": ["src/**/*.spec.ts", "node_modules", "build"]
 }

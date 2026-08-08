@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig-build-esm.json",
+  "compilerOptions": {
+    // NodeNext takes the module format from the nearest package.json "type",
+    // which is "module" here, so it would emit ESM into build/cjs and
+    // `require()` of the package would throw at load time. Classic CommonJS
+    // emit is the only combination TypeScript accepts for a real CJS output,
+    // and it requires node10 resolution — deprecated in TypeScript 6 and
+    // removed in 7, so this needs revisiting when 7 becomes usable here.
+    "module": "CommonJS",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "outDir": "./build/cjs",
+    "target": "ES2023"
+  }
+}

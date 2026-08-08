@@ -1,21 +1,33 @@
-NOTE: Forked repository from: https://github.com/engcfraposo/nestjs-azure-service-bus
-
-This fork is published as `@icazemier/nestjs-azure-service-bus`. All credit for
-the original work goes to [engcfraposo](https://github.com/engcfraposo); the
-package, its API and its licence are unchanged.
-
 # NestJS Azure Service Bus
 
 [![npm version](https://img.shields.io/npm/v/@icazemier/nestjs-azure-service-bus.svg)](https://www.npmjs.com/package/@icazemier/nestjs-azure-service-bus)
 [![license](https://img.shields.io/npm/l/@icazemier/nestjs-azure-service-bus.svg)](https://github.com/icazemier/nestjs-azure-service-bus/blob/main/LICENSE)
 
-A dynamic module for NestJS that provides integration with Azure Service Bus.
+Inject Azure Service Bus senders, receivers and the administration client
+straight into your NestJS providers.
+
+**This is a maintained fork** of
+[engcfraposo/nestjs-azure-service-bus](https://github.com/engcfraposo/nestjs-azure-service-bus),
+which has had no release since September 2023 and still targets NestJS 10. All
+credit for the original design goes to
+[engcfraposo](https://github.com/engcfraposo); this fork keeps the same idea and
+the same MIT licence, on NestJS 11 with a clean dependency tree.
+
+## Requirements
+
+- Node.js 22 or newer
+- NestJS 11
 
 ## Installation
 
 ```bash
-npm install @icazemier/nestjs-azure-service-bus
+npm install @icazemier/nestjs-azure-service-bus @azure/service-bus @azure/identity
 ```
+
+The NestJS, Azure and `reflect-metadata` packages are peer dependencies, so your
+application decides their versions and this package cannot pull a second copy of
+NestJS into your tree. A Nest application already provides `@nestjs/common` and
+`reflect-metadata`.
 
 ## Description
 
@@ -66,12 +78,58 @@ Replace `'my-queue'` with the name of your Azure Service Bus queue.
 
 ### AzureServiceBusModule - Configuration Options
 
-The `forRoot` method of the `AzureServiceBusModule` accepts a configuration object with two possible options:
+`forRoot` takes either a connection string or a namespace, never both:
 
-- `connectionString`: The connection string for your Azure Service Bus namespace.
-- `fullyQualifiedNamespace`: The fully qualified namespace of your Azure Service Bus namespace.
+- `connectionString`: the connection string for your Azure Service Bus namespace.
+- `fullyQualifiedNamespace`: the namespace, for example `example.servicebus.windows.net`, plus an optional `credential`.
 
-You can provide either the `connectionString` or the `fullyQualifiedNamespace`, but not both.
+When you pass a namespace without a `credential`, a `DefaultAzureCredential` is
+created for you. Pass one explicitly when your application already has a
+configured credential, so that chain does not probe the environment, managed
+identity and your local Azure CLI login a second time:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ManagedIdentityCredential } from '@azure/identity';
+import { AzureServiceBusModule } from '@icazemier/nestjs-azure-service-bus';
+
+@Module({
+  imports: [
+    AzureServiceBusModule.forRoot({
+      fullyQualifiedNamespace: 'example.servicebus.windows.net',
+      credential: new ManagedIdentityCredential(),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### AzureServiceBusModule - Configuring asynchronously
+
+`forRootAsync` builds the same options from whatever your application injects.
+The factory arguments are typed from your own `useFactory`, so anything you list
+in `inject` is what you get:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AzureServiceBusModule } from '@icazemier/nestjs-azure-service-bus';
+
+@Module({
+  imports: [
+    AzureServiceBusModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connectionString: config.getOrThrow('SERVICE_BUS_CONNECTION_STRING'),
+      }),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`AzureServiceBusAdminModule.forRootAsync` takes the same shape.
 
 ### AzureServiceBusModule - Dynamic Module Options
 
@@ -212,6 +270,44 @@ export class MyService {
 ```
 
 for another method the `ServiceBusAdministrationClient` see the [azure sdk](https://www.npmjs.com/package/@azure/service-bus)
+
+## Shutting down
+
+The client is closed for you when the Nest application closes, which also closes
+every sender and receiver created from it. Calling `app.close()` is enough; to
+have a `SIGTERM` or `SIGINT` reach that path, enable Nest's shutdown hooks as
+usual:
+
+```typescript
+const app = await NestFactory.create(AppModule);
+app.enableShutdownHooks();
+```
+
+## Migrating from 0.x
+
+The 1.0.0 release fixes the parts of the original design that could not work as
+intended. If you used 0.x:
+
+- **`forFeatureAsync` is gone.** It registered its senders and receivers under
+  two array tokens rather than one token per queue, so nothing it created could
+  ever be reached by `@Sender(name)` or `@Receiver(name)` — those need a name
+  that is already a literal in your source. Use `forFeature` with the queue
+  names and `forRootAsync` for the connection, which is the part that genuinely
+  needs to be resolved at runtime.
+- **Queue names are no longer upper-cased** to derive injection tokens. Azure
+  queue names are case sensitive, so `orders` and `Orders` used to collapse onto
+  one provider. Nothing changes for you unless you relied on that collision.
+- **The client is created when the module is instantiated**, not while the
+  module graph is being described. A bad connection string now fails at startup
+  instead of at import time.
+- **`@nestjs/common`, `@azure/service-bus`, `@azure/identity` and
+  `reflect-metadata` became peer dependencies**, and `@nestjs/core`,
+  `@nestjs/config`, `@nestjs/platform-express` and `rxjs` are no longer
+  dependencies at all. Installing this package no longer pulls Express into your
+  application.
+- **Only the root module is global.** `forFeature` modules are scoped to
+  whatever imports them, instead of publishing one feature's senders
+  application-wide.
 
 ## Releasing
 
