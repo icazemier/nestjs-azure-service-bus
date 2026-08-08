@@ -1,17 +1,20 @@
 NOTE: Forked repository from: https://github.com/engcfraposo/nestjs-azure-service-bus
 
+This fork is published as `@icazemier/nestjs-azure-service-bus`. All credit for
+the original work goes to [engcfraposo](https://github.com/engcfraposo); the
+package, its API and its licence are unchanged.
+
 # NestJS Azure Service Bus
 
-[![npm version](https://img.shields.io/npm/v/nestjs-azure-service-bus.svg)](https://www.npmjs.com/package/nestjs-azure-service-bus)
-[![license](https://img.shields.io/npm/l/nestjs-azure-service-bus.svg)](https://github.com/engcfraposo/nestjs-azure-service-bus/blob/08d728f7e13b1efc51bd05c34e7d550b4cef23fb/LICENSE)
-[![coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)](https://github.com/engcfraposo/nestjs-azure-service-bus/blob/8e7abef3ab8c7df28c9ad9a8483ae7f52a4233fb/README.md)
+[![npm version](https://img.shields.io/npm/v/@icazemier/nestjs-azure-service-bus.svg)](https://www.npmjs.com/package/@icazemier/nestjs-azure-service-bus)
+[![license](https://img.shields.io/npm/l/@icazemier/nestjs-azure-service-bus.svg)](https://github.com/icazemier/nestjs-azure-service-bus/blob/main/LICENSE)
 
 A dynamic module for NestJS that provides integration with Azure Service Bus.
 
 ## Installation
 
 ```bash
-npm install nestjs-azure-service-bus
+npm install @icazemier/nestjs-azure-service-bus
 ```
 
 ## Description
@@ -26,7 +29,7 @@ To use the Azure Service Bus module, import it into your NestJS application's ro
 
 ```typescript
 import { Module } from '@nestjs/common';
-import { AzureServiceBusModule } from 'nestjs-azure-service-bus';
+import { AzureServiceBusModule } from '@icazemier/nestjs-azure-service-bus';
 
 @Module({
   imports: [
@@ -46,7 +49,7 @@ You can use the `Sender` and `Receiver` decorators provided by the module to inj
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { Sender, Receiver } from 'nestjs-azure-service-bus';
+import { Sender, Receiver } from '@icazemier/nestjs-azure-service-bus';
 
 @Injectable()
 export class MyService {
@@ -79,7 +82,7 @@ The `forFeature` method of the `AzureServiceBusModule` allows you to configure s
 
 ```typescript
 import { Module } from '@nestjs/common';
-import { AzureServiceBusModule } from 'nestjs-azure-service-bus';
+import { AzureServiceBusModule } from '@icazemier/nestjs-azure-service-bus';
 
 @Module({
   imports: [
@@ -97,7 +100,7 @@ This will create senders and receivers for the specified queues.
 ```typescript
 import { ServiceBusSender } from '@azure/service-bus';
 import { Injectable } from '@nestjs/common';
-import { Sender } from 'nestjs-azure-service-bus';
+import { Sender } from '@icazemier/nestjs-azure-service-bus';
 
 @Injectable()
 export class QueueSenderService {
@@ -113,7 +116,7 @@ export class QueueSenderService {
 ```typescript
 import { ServiceBusReceiver } from '@azure/service-bus';
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Receiver } from 'nestjs-azure-service-bus';
+import { Receiver } from '@icazemier/nestjs-azure-service-bus';
 
 @Injectable()
 export class QueueReceiverService implements OnModuleInit {
@@ -139,7 +142,7 @@ export class QueueReceiverService implements OnModuleInit {
 ```typescript
 import { Module } from '@nestjs/common';
 import { QueueSenderService } from './queue-sender.service';
-import { AzureServiceBusModule } from 'nestjs-azure-service-bus';
+import { AzureServiceBusModule } from '@icazemier/nestjs-azure-service-bus';
 import { QueueReceiverService } from './queue-receiver.service';
 
 @Module({
@@ -164,7 +167,7 @@ To use the Azure Service Bus Admin module, import it into your NestJS applicatio
 
 ```typescript
 import { Module } from '@nestjs/common';
-import { AzureServiceBusAdminModule } from 'nestjs-azure-service-bus';
+import { AzureServiceBusAdminModule } from '@icazemier/nestjs-azure-service-bus';
 
 @Module({
   imports: [
@@ -184,7 +187,7 @@ You can use the `Admin` decorator provided by the module to inject Azure Service
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { Admin } from 'nestjs-azure-service-bus';
+import { Admin } from '@icazemier/nestjs-azure-service-bus';
 
 @Injectable()
 export class MyService {
@@ -210,10 +213,31 @@ export class MyService {
 
 for another method the `ServiceBusAdministrationClient` see the [azure sdk](https://www.npmjs.com/package/@azure/service-bus)
 
+## Releasing
+
+Releases run on [changesets](https://github.com/changesets/changesets) and
+publish on merge — there is no release PR to approve and no version to bump by
+hand.
+
+1. Ship a user-facing change with a changeset: `npm run changeset`, committed in
+   `.changeset/` alongside the code.
+2. Merging into `development` or `main` runs `.github/workflows/release.yml`,
+   which applies the pending changesets, commits `chore: version packages` back
+   to the branch, publishes, and then asserts that npm actually serves the new
+   version.
+3. The branch decides the channel: `main` publishes to `latest`, anything else
+   to `beta`. `scripts/pre-mode.mjs` handles that, so nobody runs
+   `changeset pre enter` / `pre exit`.
+4. `package.json` is the version source of truth.
+
+Publishing uses [npm trusted publishing](https://docs.npmjs.com/trusted-publishers)
+over OIDC, so the pipeline holds no npm token and every release carries
+provenance.
+
 ## Support
 
-- For issues or feature requests, please open an [issue](https://github.com/engcfraposo/nestjs-azure-service-bus/issues).
-- For contributions, please refer to the [contribution guide](https://github.com/engcfraposo/nestjs-azure-service-bus/blob/main/CONTRIBUTING.md).
+- For issues or feature requests with this fork, please open an [issue](https://github.com/icazemier/nestjs-azure-service-bus/issues).
+- For the original project, see [engcfraposo/nestjs-azure-service-bus](https://github.com/engcfraposo/nestjs-azure-service-bus).
 
 ## License
 
