@@ -1,0 +1,8 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@icazemier/nestjs-azure-service-bus": "0.0.22"
+  },
+  "changesets": []
+}
