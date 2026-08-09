@@ -51,7 +51,8 @@ describe('AzureServiceBusAdminModule', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         AzureServiceBusAdminModule.forRootAsync({
-          useFactory: async () => ({ connectionString: CONNECTION_STRING }),
+          useFactory: () =>
+            Promise.resolve({ connectionString: CONNECTION_STRING }),
         }),
       ],
     }).compile();

@@ -1,6 +1,10 @@
 import { Injectable, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { ServiceBusClient } from '@azure/service-bus';
+import {
+  ServiceBusClient,
+  ServiceBusReceiver,
+  ServiceBusSender,
+} from '@azure/service-bus';
 import { AzureServiceBusModule } from './azure-service-bus.module.js';
 import {
   AZURE_SERVICE_BUS_CLIENT,
@@ -49,10 +53,11 @@ describe('AzureServiceBusModule', () => {
 
     it('uses the credential it is given for a namespace', async () => {
       const credential = {
-        getToken: async () => ({
-          token: 'token',
-          expiresOnTimestamp: Date.now() + 60_000,
-        }),
+        getToken: () =>
+          Promise.resolve({
+            token: 'token',
+            expiresOnTimestamp: Date.now() + 60_000,
+          }),
       };
 
       const moduleRef = await Test.createTestingModule({
@@ -94,7 +99,7 @@ describe('AzureServiceBusModule', () => {
       ).rejects.toThrow();
     });
 
-    it('is global, so the client reaches modules that do not import it', async () => {
+    it('is global, so the client reaches modules that do not import it', () => {
       const definition = AzureServiceBusModule.forRoot({
         connectionString: CONNECTION_STRING,
       });
@@ -128,7 +133,8 @@ describe('AzureServiceBusModule', () => {
       const moduleRef = await Test.createTestingModule({
         imports: [
           AzureServiceBusModule.forRootAsync({
-            useFactory: async () => ({ connectionString: CONNECTION_STRING }),
+            useFactory: () =>
+              Promise.resolve({ connectionString: CONNECTION_STRING }),
           }),
         ],
       }).compile();
@@ -155,10 +161,12 @@ describe('AzureServiceBusModule', () => {
         ],
       }).compile();
 
-      expect(moduleRef.get(senderToken('orders')).entityPath).toBe('orders');
-      expect(moduleRef.get(receiverToken('invoices')).entityPath).toBe(
-        'invoices',
-      );
+      expect(
+        moduleRef.get<ServiceBusSender>(senderToken('orders')).entityPath,
+      ).toBe('orders');
+      expect(
+        moduleRef.get<ServiceBusReceiver>(receiverToken('invoices')).entityPath,
+      ).toBe('invoices');
 
       await moduleRef.close();
     });
@@ -173,8 +181,12 @@ describe('AzureServiceBusModule', () => {
         ],
       }).compile();
 
-      expect(moduleRef.get(senderToken('orders')).entityPath).toBe('orders');
-      expect(moduleRef.get(senderToken('Orders')).entityPath).toBe('Orders');
+      expect(
+        moduleRef.get<ServiceBusSender>(senderToken('orders')).entityPath,
+      ).toBe('orders');
+      expect(
+        moduleRef.get<ServiceBusSender>(senderToken('Orders')).entityPath,
+      ).toBe('Orders');
 
       await moduleRef.close();
     });
