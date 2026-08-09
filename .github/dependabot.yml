@@ -1,0 +1,26 @@
+version: 2
+
+updates:
+  # Bumps target `development`, not the default branch: merging into a release
+  # branch publishes, so a dependency PR raised there would ship on merge.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # One PR for the toolchain rather than a dozen: every merge into
+      # `development` runs the full matrix and a release, so batching is what
+      # keeps that cost proportional to the work.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
