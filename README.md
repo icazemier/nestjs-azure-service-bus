@@ -337,4 +337,9 @@ provenance.
 
 ## License
 
-This package is [MIT licensed](https://github.com/engcfraposo/nestjs-azure-service-bus/blob/main/LICENSE).
+This package is [MIT licensed](https://github.com/icazemier/nestjs-azure-service-bus/blob/main/LICENSE).
+
+The licence file carries two copyright lines, and both stay: the original
+notice for [engcfraposo](https://github.com/engcfraposo), who wrote the code
+this fork is built on, alongside the one for the fork itself. MIT requires the
+original notice to travel with the work, and the credit is owed regardless.
