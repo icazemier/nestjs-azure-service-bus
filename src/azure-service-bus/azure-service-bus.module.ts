@@ -1,140 +1,102 @@
-// azure-service-bus.module.ts
-import { DynamicModule, Module, Provider, Global } from '@nestjs/common';
+import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { ServiceBusClient } from '@azure/service-bus';
 import { DefaultAzureCredential } from '@azure/identity';
-import { ConfigService } from '@nestjs/config';
+import type {
+  AzureServiceBusAsyncOptions,
+  AzureServiceBusConnectionOptions,
+  AzureServiceBusFeatureOptions,
+} from '../options.js';
+import {
+  AZURE_SERVICE_BUS_CLIENT,
+  receiverToken,
+  senderToken,
+} from '../tokens.js';
+import { AzureServiceBusClientLifecycle } from './azure-service-bus-client.lifecycle.js';
 
-export type AzureSBOptions =
-  | { connectionString: string }
-  | { fullyQualifiedNamespace: string };
+const createClient = (
+  options: AzureServiceBusConnectionOptions,
+): ServiceBusClient =>
+  'connectionString' in options
+    ? new ServiceBusClient(options.connectionString)
+    : new ServiceBusClient(
+        options.fullyQualifiedNamespace,
+        options.credential ?? new DefaultAzureCredential(),
+      );
 
-export type AzureSBSenderReceiverOptions = {
-  senders?: string[];
-  receivers?: string[];
-};
-
-@Global()
 @Module({})
 export class AzureServiceBusModule {
-  static forRoot(options: AzureSBOptions): DynamicModule {
-    let clientProvider: Provider;
-
-    if ('connectionString' in options) {
-      clientProvider = {
-        provide: 'AZURE_SERVICE_BUS_CONNECTION',
-        useValue: new ServiceBusClient(options.connectionString),
-      };
-    } else {
-      const credential = new DefaultAzureCredential();
-      clientProvider = {
-        provide: 'AZURE_SERVICE_BUS_CONNECTION',
-        useValue: new ServiceBusClient(
-          options.fullyQualifiedNamespace,
-          credential,
-        ),
-      };
-    }
-
-    return {
-      module: AzureServiceBusModule,
-      providers: [clientProvider],
-      exports: [clientProvider],
-    };
-  }
-
-  static forRootAsync(options: {
-    imports?: any[];
-    useFactory: (
-      configService: ConfigService,
-    ) => Promise<AzureSBOptions> | AzureSBOptions;
-    inject?: any[];
-  }): DynamicModule {
+  /**
+   * Registers the client for the whole application.
+   *
+   * The connection is opened by a factory rather than a `useValue`, so it is
+   * established when Nest instantiates the provider instead of while the
+   * module graph is still being described. Before 1.0.0 a call to `forRoot`
+   * opened an AMQP connection as a side effect of evaluating the module
+   * metadata, which meant importing a module was enough to connect.
+   */
+  static forRoot(options: AzureServiceBusConnectionOptions): DynamicModule {
     const clientProvider: Provider = {
-      provide: 'AZURE_SERVICE_BUS_CONNECTION',
-      useFactory: async (
-        configService: ConfigService,
-      ): Promise<ServiceBusClient> => {
-        const clientOptions = await options.useFactory(configService);
-
-        if ('connectionString' in clientOptions) {
-          return new ServiceBusClient(clientOptions.connectionString);
-        } else {
-          const credential = new DefaultAzureCredential();
-          return new ServiceBusClient(
-            clientOptions.fullyQualifiedNamespace,
-            credential,
-          );
-        }
-      },
-      inject: options.inject || [],
+      provide: AZURE_SERVICE_BUS_CLIENT,
+      useFactory: (): ServiceBusClient => createClient(options),
     };
 
     return {
       module: AzureServiceBusModule,
-      imports: options.imports || [],
-      providers: [clientProvider],
-      exports: [clientProvider],
+      // Only the root registration is global. The class-level @Global() this
+      // replaces also made every forFeature module global, which published
+      // one feature's senders to the entire application.
+      global: true,
+      providers: [clientProvider, AzureServiceBusClientLifecycle],
+      exports: [AZURE_SERVICE_BUS_CLIENT],
     };
   }
 
-  static forFeature(options: AzureSBSenderReceiverOptions): DynamicModule {
-    const senderProviders =
-      options.senders?.map((queue) => ({
-        provide: `AZURE_SB_SENDER_${queue.toUpperCase()}`,
+  static forRootAsync<TInjected extends readonly unknown[]>(
+    options: AzureServiceBusAsyncOptions<TInjected>,
+  ): DynamicModule {
+    const clientProvider: Provider = {
+      provide: AZURE_SERVICE_BUS_CLIENT,
+      useFactory: async (...args: TInjected): Promise<ServiceBusClient> =>
+        createClient(await options.useFactory(...args)),
+      inject: options.inject ?? [],
+    };
+
+    return {
+      module: AzureServiceBusModule,
+      global: true,
+      imports: options.imports ?? [],
+      providers: [clientProvider, AzureServiceBusClientLifecycle],
+      exports: [AZURE_SERVICE_BUS_CLIENT],
+    };
+  }
+
+  /**
+   * Opens senders and receivers for the given queues and exposes each one
+   * under its own token, which is what `@Sender` and `@Receiver` resolve.
+   */
+  static forFeature(options: AzureServiceBusFeatureOptions): DynamicModule {
+    const senderProviders: Provider[] = (options.senders ?? []).map(
+      (queue) => ({
+        provide: senderToken(queue),
         useFactory: (client: ServiceBusClient) => client.createSender(queue),
-        inject: ['AZURE_SERVICE_BUS_CONNECTION'],
-      })) || [];
+        inject: [AZURE_SERVICE_BUS_CLIENT],
+      }),
+    );
 
-    const receiverProviders =
-      options.receivers?.map((queue) => ({
-        provide: `AZURE_SB_RECEIVER_${queue.toUpperCase()}`,
+    const receiverProviders: Provider[] = (options.receivers ?? []).map(
+      (queue) => ({
+        provide: receiverToken(queue),
         useFactory: (client: ServiceBusClient) => client.createReceiver(queue),
-        inject: ['AZURE_SERVICE_BUS_CONNECTION'],
-      })) || [];
+        inject: [AZURE_SERVICE_BUS_CLIENT],
+      }),
+    );
+
+    const providers = [...senderProviders, ...receiverProviders];
 
     return {
       module: AzureServiceBusModule,
-      providers: [...senderProviders, ...receiverProviders],
-      exports: [...senderProviders, ...receiverProviders],
-    };
-  }
-
-  static forFeatureAsync(options: {
-    imports?: any[];
-    useFactory: (
-      configService: ConfigService,
-    ) => Promise<AzureSBSenderReceiverOptions> | AzureSBSenderReceiverOptions;
-    inject?: any[];
-  }): DynamicModule {
-    const optionsProvider: Provider = {
-      provide: 'AZURE_SB_OPTIONS',
-      useFactory: options.useFactory,
-      inject: options.inject || [],
-    };
-
-    const senderProviders = {
-      provide: 'AZURE_SB_SENDERS',
-      useFactory: (
-        client: ServiceBusClient,
-        options: AzureSBSenderReceiverOptions,
-      ) => options.senders?.map((queue) => client.createSender(queue)),
-      inject: ['AZURE_SERVICE_BUS_CONNECTION', 'AZURE_SB_OPTIONS'],
-    };
-
-    const receiverProviders = {
-      provide: 'AZURE_SB_RECEIVERS',
-      useFactory: (
-        client: ServiceBusClient,
-        options: AzureSBSenderReceiverOptions,
-      ) => options.receivers?.map((queue) => client.createReceiver(queue)),
-      inject: ['AZURE_SERVICE_BUS_CONNECTION', 'AZURE_SB_OPTIONS'],
-    };
-
-    return {
-      module: AzureServiceBusModule,
-      imports: options.imports || [],
-      providers: [optionsProvider, senderProviders, receiverProviders],
-      exports: [senderProviders, receiverProviders],
+      providers,
+      exports: providers,
     };
   }
 }
