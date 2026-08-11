@@ -1,3 +1,9 @@
 import { Inject } from '@nestjs/common';
+import { AZURE_SERVICE_BUS_ADMIN_CLIENT } from '../tokens.js';
 
-export const Admin = () => Inject('AZURE_SERVICE_BUS_ADMIN_CLIENT');
+/**
+ * Injects the `ServiceBusAdministrationClient` registered by
+ * `AzureServiceBusAdminModule.forRoot` or `forRootAsync`.
+ */
+export const Admin = (): ReturnType<typeof Inject> =>
+  Inject(AZURE_SERVICE_BUS_ADMIN_CLIENT);

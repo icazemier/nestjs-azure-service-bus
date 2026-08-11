@@ -1,76 +1,64 @@
-// azure-service-bus-admin.module.ts
-import { DynamicModule, Module, Provider, Global } from '@nestjs/common';
+import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { ServiceBusAdministrationClient } from '@azure/service-bus';
 import { DefaultAzureCredential } from '@azure/identity';
-import { ConfigService } from '@nestjs/config';
+import type {
+  AzureServiceBusAsyncOptions,
+  AzureServiceBusConnectionOptions,
+} from '../options.js';
+import { AZURE_SERVICE_BUS_ADMIN_CLIENT } from '../tokens.js';
 
-export type AzureSBAAdminOptions =
-  | { connectionString: string }
-  | { fullyQualifiedNamespace: string };
+const createAdminClient = (
+  options: AzureServiceBusConnectionOptions,
+): ServiceBusAdministrationClient =>
+  'connectionString' in options
+    ? new ServiceBusAdministrationClient(options.connectionString)
+    : new ServiceBusAdministrationClient(
+        options.fullyQualifiedNamespace,
+        options.credential ?? new DefaultAzureCredential(),
+      );
 
-@Global()
+/**
+ * The management client, for creating and inspecting queues, topics and
+ * subscriptions.
+ *
+ * It speaks HTTP rather than AMQP and holds no connection, so unlike
+ * `AzureServiceBusModule` there is nothing here to close on shutdown.
+ */
 @Module({})
 export class AzureServiceBusAdminModule {
-  static forRoot(options: AzureSBAAdminOptions): DynamicModule {
-    let adminClientProvider: Provider;
-
-    if ('connectionString' in options) {
-      adminClientProvider = {
-        provide: 'AZURE_SERVICE_BUS_ADMIN_CLIENT',
-        useValue: new ServiceBusAdministrationClient(options.connectionString),
-      };
-    } else {
-      const credential = new DefaultAzureCredential();
-      adminClientProvider = {
-        provide: 'AZURE_SERVICE_BUS_ADMIN_CLIENT',
-        useValue: new ServiceBusAdministrationClient(
-          options.fullyQualifiedNamespace,
-          credential,
-        ),
-      };
-    }
+  static forRoot(options: AzureServiceBusConnectionOptions): DynamicModule {
+    const adminClientProvider: Provider = {
+      provide: AZURE_SERVICE_BUS_ADMIN_CLIENT,
+      useFactory: (): ServiceBusAdministrationClient =>
+        createAdminClient(options),
+    };
 
     return {
       module: AzureServiceBusAdminModule,
+      global: true,
       providers: [adminClientProvider],
-      exports: [adminClientProvider],
+      exports: [AZURE_SERVICE_BUS_ADMIN_CLIENT],
     };
   }
 
-  static forRootAsync(options: {
-    imports?: any[];
-    useFactory: (
-      configService: ConfigService,
-    ) => Promise<AzureSBAAdminOptions> | AzureSBAAdminOptions;
-    inject?: any[];
-  }): DynamicModule {
+  static forRootAsync<TInjected extends readonly unknown[]>(
+    options: AzureServiceBusAsyncOptions<TInjected>,
+  ): DynamicModule {
     const adminClientProvider: Provider = {
-      provide: 'AZURE_SERVICE_BUS_ADMIN_CLIENT',
+      provide: AZURE_SERVICE_BUS_ADMIN_CLIENT,
       useFactory: async (
-        configService: ConfigService,
-      ): Promise<ServiceBusAdministrationClient> => {
-        const adminClientOptions = await options.useFactory(configService);
-
-        if ('connectionString' in adminClientOptions) {
-          return new ServiceBusAdministrationClient(
-            adminClientOptions.connectionString,
-          );
-        } else {
-          const credential = new DefaultAzureCredential();
-          return new ServiceBusAdministrationClient(
-            adminClientOptions.fullyQualifiedNamespace,
-            credential,
-          );
-        }
-      },
-      inject: options.inject || [],
+        ...args: TInjected
+      ): Promise<ServiceBusAdministrationClient> =>
+        createAdminClient(await options.useFactory(...args)),
+      inject: options.inject ?? [],
     };
 
     return {
       module: AzureServiceBusAdminModule,
-      imports: options.imports || [],
+      global: true,
+      imports: options.imports ?? [],
       providers: [adminClientProvider],
-      exports: [adminClientProvider],
+      exports: [AZURE_SERVICE_BUS_ADMIN_CLIENT],
     };
   }
 }

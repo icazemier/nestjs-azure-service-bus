@@ -1,7 +1,16 @@
 import { Inject } from '@nestjs/common';
+import { receiverToken, senderToken } from '../tokens.js';
 
-export const Sender = (queue: string) =>
-  Inject(`AZURE_SB_SENDER_${queue.toUpperCase()}`);
+/**
+ * Injects the sender for `queue`, which must have been registered through
+ * `AzureServiceBusModule.forFeature({ senders: [queue] })`.
+ */
+export const Sender = (queue: string): ReturnType<typeof Inject> =>
+  Inject(senderToken(queue));
 
-export const Receiver = (queue: string) =>
-  Inject(`AZURE_SB_RECEIVER_${queue.toUpperCase()}`);
+/**
+ * Injects the receiver for `queue`, which must have been registered through
+ * `AzureServiceBusModule.forFeature({ receivers: [queue] })`.
+ */
+export const Receiver = (queue: string): ReturnType<typeof Inject> =>
+  Inject(receiverToken(queue));
