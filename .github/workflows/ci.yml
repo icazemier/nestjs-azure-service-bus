@@ -31,3 +31,31 @@ jobs:
       # Loads the built artifacts the way consumers do; the unit tests import
       # TypeScript sources and cannot catch a wrong module format.
       - run: npm run smoke
+
+  nestjs-range:
+    name: Test on NestJS ${{ matrix.nestjs }}
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The declared floor of each major, plus the newest 10.x. A caret range
+        # would resolve to the newest release and leave the floor — where a
+        # missing API would actually show up — untested. The newest 11.x needs
+        # no entry: the job above installs it from the lockfile.
+        nestjs: ['10.3.2', '10', '11.0.0']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      # Installed over the clean tree in the runner's throwaway checkout, so
+      # nothing is committed. An unresolvable peer graph fails the job here
+      # rather than leaving the development version in place and testing that.
+      - name: Install NestJS ${{ matrix.nestjs }}
+        run: npm install --no-save --no-audit --no-fund @nestjs/common@${{ matrix.nestjs }} @nestjs/core@${{ matrix.nestjs }} @nestjs/testing@${{ matrix.nestjs }}
+      - name: Report what actually resolved
+        run: node -p "'@nestjs/common ' + require('@nestjs/common/package.json').version"
+      - run: npm run typecheck
+      - run: npm test

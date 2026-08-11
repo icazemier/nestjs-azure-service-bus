@@ -8,15 +8,15 @@ straight into your NestJS providers.
 
 **This is a maintained fork** of
 [engcfraposo/nestjs-azure-service-bus](https://github.com/engcfraposo/nestjs-azure-service-bus),
-which has had no release since September 2023 and still targets NestJS 10. All
-credit for the original design goes to
-[engcfraposo](https://github.com/engcfraposo); this fork keeps the same idea and
-the same MIT licence, on NestJS 11 with a clean dependency tree.
+which has had no release since September 2023. All credit for the original
+design goes to [engcfraposo](https://github.com/engcfraposo); this fork keeps
+the same idea and the same MIT licence, on NestJS 10 and 11 with a clean
+dependency tree.
 
 ## Requirements
 
 - Node.js 22 or newer
-- NestJS 11
+- NestJS 10.3.2 or newer, or 11
 
 ## Installation
 
