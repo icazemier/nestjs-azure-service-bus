@@ -16,7 +16,7 @@ dependency tree.
 ## Requirements
 
 - Node.js 22 or newer
-- NestJS 10 or 11
+- NestJS 10.3.2 or newer, or 11
 
 ## Installation
 

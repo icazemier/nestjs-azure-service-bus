@@ -85,7 +85,7 @@
   "peerDependencies": {
     "@azure/identity": "^4.0.0",
     "@azure/service-bus": "^7.9.0",
-    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "@nestjs/common": "^10.3.2 || ^11.0.0",
     "reflect-metadata": "^0.2.0"
   },
   "devDependencies": {
