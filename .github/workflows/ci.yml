@@ -31,3 +31,22 @@ jobs:
       # Loads the built artifacts the way consumers do; the unit tests import
       # TypeScript sources and cannot catch a wrong module format.
       - run: npm run smoke
+
+  nestjs-floor:
+    name: Test on the oldest supported NestJS
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      # The job above covers the top of the peer range, because the development
+      # dependencies track NestJS 11. Only the floor needs installing, and it is
+      # rewritten in the runner's throwaway checkout; nothing is committed.
+      - name: Install NestJS from the bottom of the peer range
+        run: npm install --no-save --no-audit --no-fund @nestjs/common@^10.0.0 @nestjs/core@^10.0.0 @nestjs/testing@^10.0.0
+      - run: npm run typecheck
+      - run: npm test
