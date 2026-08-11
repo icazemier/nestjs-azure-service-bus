@@ -1,5 +1,8 @@
 # compiled output
 /build
+# Output of the pre-fork build. Nothing writes here any more, but a stale copy
+# survives in existing checkouts and is one `git add .` away from being tracked.
+/dist
 /node_modules
 
 # Logs
