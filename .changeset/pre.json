@@ -5,6 +5,7 @@
     "@icazemier/nestjs-azure-service-bus": "0.0.22"
   },
   "changesets": [
+    "nestjs-10-peer-range",
     "patched-dependency-floors",
     "rebuild-module-lifecycle-tokens-peers"
   ]
